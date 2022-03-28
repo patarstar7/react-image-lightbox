@@ -2,12 +2,6 @@ import { mount } from 'enzyme';
 import React from 'react';
 import Modal from 'react-modal';
 import Lightbox from '../index';
-import { translate, getHighestSafeWindowContext } from '../util';
-import {
-  MAX_ZOOM_LEVEL,
-  MIN_ZOOM_LEVEL,
-  ZOOM_BUTTON_INCREMENT_SIZE,
-} from '../constant';
 
 // Mock the loadStyles static function to avoid
 // issues with a lack of styles._insertCss
@@ -71,7 +65,7 @@ describe('Lightbox structure', () => {
 
   it('contains custom toolbar buttons when supplied', () => {
     wrapper.setProps({
-      toolbarButtons: [<button type="button" className="my-test-button" />],
+      toolbarButtons: [<button className="my-test-button" />],
     });
     expect(wrapper.find('.ril-toolbar__item .my-test-button').length).toEqual(
       1
@@ -129,17 +123,7 @@ describe('Events', () => {
     <Lightbox {...extendedCommonProps} {...mockFns} animationDisabled />
   );
 
-  // Spy zoomBtn focus
-  const { zoomOutBtn, zoomInBtn } = wrapper.instance();
-  jest.spyOn(zoomOutBtn.current, 'focus');
-  jest.spyOn(zoomInBtn.current, 'focus');
-
-  it('Calls onAfterOpen when mounted', async () => {
-    // Rough way to wait for react-modal to call its onAfterOpen,
-    // which is delayed by a requestAnimationFrame:
-    // https://github.com/reactjs/react-modal/blob/fb6bab5e7/src/components/ModalPortal.js#L226-L230
-    await new Promise(resolve => setTimeout(resolve));
-
+  it('Calls onAfterOpen when mounted', () => {
     expect(mockFns.onAfterOpen).toHaveBeenCalledTimes(1);
     expect(mockFns.onAfterOpen).toHaveBeenCalledWith();
   });
@@ -190,22 +174,6 @@ describe('Events', () => {
     expect(mockFns.onImageLoadError).toHaveBeenCalledTimes(0);
     wrapper.setProps({ mainSrc: LOAD_FAILURE_SRC });
   });
-
-  it('Calls the the ZoomIn Focus when ZoomOut is disabled', () => {
-    wrapper.setState({
-      zoomLevel: MIN_ZOOM_LEVEL + ZOOM_BUTTON_INCREMENT_SIZE,
-    });
-    wrapper.instance().handleZoomOutButtonClick();
-    expect(zoomInBtn.current.focus).toHaveBeenCalledTimes(1);
-  });
-
-  it('Calls the the ZoomOut Focus when ZoomIn is disabled', () => {
-    wrapper.setState({
-      zoomLevel: MAX_ZOOM_LEVEL - ZOOM_BUTTON_INCREMENT_SIZE,
-    });
-    wrapper.instance().handleZoomInButtonClick();
-    expect(zoomOutBtn.current.focus).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('Key bindings', () => {
@@ -242,12 +210,23 @@ describe('Key bindings', () => {
     expect(mockMoveNextRequest).toHaveBeenCalledTimes(0);
   });
 
-  it('Responds to "move to next" key binding when next image available', () => {
-    wrapper.setProps({ nextSrc: '/my/next/src' });
+  it('Responds to "move to next" key binding when next custom content available', () => {
+    wrapper.setProps({
+      nextSrc: null,
+      nextCustomContent: <div>next content</div>,
+    });
 
     // Simulate right arrow key press
     simulateKey(39);
     expect(mockMoveNextRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('Responds to "move to next" key binding when next image available', () => {
+    wrapper.setProps({ nextSrc: '/my/next/src', nextCustomContent: null });
+
+    // Simulate right arrow key press
+    simulateKey(39);
+    expect(mockMoveNextRequest).toHaveBeenCalledTimes(2);
   });
 
   it('Doesn\'t respond to "move to prev" key binding when no prev image available', () => {
@@ -256,12 +235,23 @@ describe('Key bindings', () => {
     expect(mockMovePrevRequest).toHaveBeenCalledTimes(0);
   });
 
-  it('Responds to "move to prev" key binding', () => {
-    wrapper.setProps({ prevSrc: '/my/prev/src' });
+  it('Responds to "move to prev" key binding with custom content', () => {
+    wrapper.setProps({
+      prevSrc: null,
+      prevCustomContent: <div>previous content</div>,
+    });
 
     // Simulate left arrow key press
     simulateKey(37);
     expect(mockMovePrevRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('Responds to "move to prev" key binding', () => {
+    wrapper.setProps({ prevSrc: '/my/prev/src', prevCustomContent: null });
+
+    // Simulate left arrow key press
+    simulateKey(37);
+    expect(mockMovePrevRequest).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -271,6 +261,18 @@ describe('Snapshot Testing', () => {
       <Lightbox
         {...commonProps}
         reactModalProps={{ appElement: global.document.createElement('div') }}
+      />
+    );
+    expect(wrapper).toMatchSnapshot();
+  });
+
+  it('Lightbox renders properly with customContent', () => {
+    const wrapper = mount(
+      <Lightbox
+        mainCustomContent={<div>testing</div>}
+        prevCustomContent={<span>could be anything</span>}
+        nextCustomContent={<h1>next component</h1>}
+        onCloseRequest={() => {}}
       />
     );
     expect(wrapper).toMatchSnapshot();
@@ -301,25 +303,5 @@ describe('Error Testing', () => {
     expect(wrapper.find('div.ril__errorContainer')).toContainReact(
       imageLoadErrorMessage
     );
-  });
-});
-
-describe('Utils', () => {
-  it('translate function return empty string if str param is not passed', () => {
-    expect(translate()).toBe('');
-  });
-  it('getHighestSafeWindowContext function if parent is the same origin', () => {
-    const self = {
-      location: { href: 'http://test.test' },
-      document: { referrer: 'http://test.test' },
-    };
-    expect(getHighestSafeWindowContext(self)).toBe(global.window.top);
-  });
-  it.skip('getHighestSafeWindowContext function if parent is a different origin', () => {
-    const self = {
-      location: { href: 'http://test1.test' },
-      document: { referrer: 'http://test.test' },
-    };
-    expect(getHighestSafeWindowContext(self)).toBe(self);
   });
 });
